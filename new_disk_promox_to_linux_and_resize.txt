@@ -1,0 +1,113 @@
+adds disk to a vm
+
+fdisk /dev/sdb
+
+Welcome to fdisk (util-linux 2.37.4).
+Changes will remain in memory only, until you decide to write them.
+Be careful before using the write command.
+
+Device does not contain a recognized partition table.
+Created a new DOS disklabel with disk identifier 0xefe05c9f.
+
+Command (m for help): n
+Partition type
+   p   primary (0 primary, 0 extended, 4 free)
+   e   extended (container for logical partitions)
+Select (default p): p
+Partition number (1-4, default 1): 1
+First sector (2048-167772159, default 2048): 
+Last sector, +/-sectors or +/-size{K,M,G,T,P} (2048-167772159, default 167772159): 
+
+Created a new partition 1 of type 'Linux' and of size 80 GiB.
+
+Command (m for help): t
+Selected partition 1
+Hex code or alias (type L to list all): 8e
+Changed type of partition 'Linux' to 'Linux LVM'.
+
+Command (m for help): w
+The partition table has been altered.
+Calling ioctl() to re-read partition table.
+Syncing disks.
+
+lsblk
+NAME        MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda           8:0    0   40G  0 disk 
+├─sda1        8:1    0    1G  0 part /boot
+└─sda2        8:2    0   39G  0 part 
+  ├─rl-root 253:0    0   35G  0 lvm  /
+  └─rl-swap 253:1    0    4G  0 lvm  [SWAP]
+sdb           8:16   0   80G  0 disk 
+└─sdb1        8:17   0   80G  0 part 
+sr0          11:0    1  1.8G  0 rom
+
+pvcreate /dev/sdb1
+File descriptor 63 (pipe:[98129]) leaked on pvcreate invocation. Parent PID 57043: bash
+  Physical volume "/dev/sdb1" successfully created.
+
+pvs
+File descriptor 63 (pipe:[98129]) leaked on pvs invocation. Parent PID 57043: bash
+  PV         VG Fmt  Attr PSize   PFree  
+  /dev/sda2  rl lvm2 a--  <39.00g      0 
+  /dev/sdb1     lvm2 ---  <80.00g <80.00g
+
+vgcreate vg_data /dev/sdb1
+File descriptor 63 (pipe:[98129]) leaked on vgcreate invocation. Parent PID 57043: bash
+  Volume group "vg_data" successfully created
+
+vgs
+File descriptor 63 (pipe:[98129]) leaked on vgs invocation. Parent PID 57043: bash
+  VG      #PV #LV #SN Attr   VSize   VFree  
+  rl        1   2   0 wz--n- <39.00g      0 
+  vg_data   1   0   0 wz--n- <80.00g <80.00g
+
+lvcreate -l 100%FREE -n lv_data vg_data
+File descriptor 63 (pipe:[98129]) leaked on lvcreate invocation. Parent PID 57043: bash
+  Logical volume "lv_data" created.
+
+lvs
+File descriptor 63 (pipe:[98129]) leaked on lvs invocation. Parent PID 57043: bash
+  LV      VG      Attr       LSize   Pool Origin Data%  Meta%  Move Log Cpy%Sync Convert
+  root    rl      -wi-ao---- <35.00g                                                    
+  swap    rl      -wi-ao----   4.00g                                                    
+  lv_data vg_data -wi-a----- <80.00g
+
+mkfs.xfs /dev/vg_data/lv_data
+meta-data=/dev/vg_data/lv_data   isize=512    agcount=4, agsize=5242624 blks
+         =                       sectsz=512   attr=2, projid32bit=1
+         =                       crc=1        finobt=1, sparse=1, rmapbt=0
+         =                       reflink=1    bigtime=1 inobtcount=1 nrext64=0
+data     =                       bsize=4096   blocks=20970496, imaxpct=25
+         =                       sunit=0      swidth=0 blks
+naming   =version 2              bsize=4096   ascii-ci=0, ftype=1
+log      =internal log           bsize=4096   blocks=16384, version=2
+         =                       sectsz=512   sunit=0 blks, lazy-count=1
+realtime =none                   extsz=4096   blocks=0, rtextents=0
+Discarding blocks...Done.
+
+mkdir /data
+
+mount /dev/vg_data/lv_data /data
+
+df -h
+
+nano /etc/fstab 
+    /dev/vg_data/lv_data	/data	xfs	defaults	0 0
+
+mount -a
+
+when resized the disk do 
+
+"refrash scan"
+echo 1 > /sys/class/block/sdb/device/rescan
+or
+partprobe
+
+expand
+growpart /dev/sdb 1 (dnf install cloud-utils-growpart)
+
+pvresize /dev/sdb1
+
+lvextend -l +100%FREE /dev/vg_data/lv_data
+
+xfs_growfs /data
