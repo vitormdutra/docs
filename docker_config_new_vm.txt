@@ -1,0 +1,23 @@
+sudo systemctl stop docker
+sudo systemctl stop docker.socket
+
+mkdir -p /data/docker
+
+# se tiver contaienrs
+rsync -aP /var/lib/docker/ /data/docker/
+
+sudo nano /etc/docker/daemon.json
+
+{
+  "data-root": "/data/docker"
+}
+
+chown -R root:root /data/docker
+chmod 711 /data/docker
+
+sudo systemctl daemon-reexec
+sudo systemctl daemon-reload
+sudo systemctl start docker
+
+# validar
+docker info | grep "Docker Root Dir"
